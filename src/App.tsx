@@ -8,6 +8,7 @@ import FoodLog from './components/FoodLog';
 import ExerciseLog from './components/ExerciseLog';
 import SymptomTracker from './components/SymptomTracker';
 import MedicationLog from './components/MedicationLog';
+import GroceryList from './components/GroceryList';
 
 export default function App() {
   const [tab, setTab] = useState<Tab>('dashboard');
@@ -29,6 +30,7 @@ export default function App() {
     exercise: 'Exercise',
     symptoms: 'Symptoms',
     medications: 'Medications',
+    grocery: 'Grocery List',
   };
 
   return (
@@ -74,6 +76,7 @@ export default function App() {
         {tab === 'exercise' && <ExerciseLog data={data} onChange={handleDataChange} />}
         {tab === 'symptoms' && <SymptomTracker data={data} onChange={handleDataChange} />}
         {tab === 'medications' && <MedicationLog data={data} onChange={handleDataChange} />}
+        {tab === 'grocery' && <GroceryList data={data} onChange={handleDataChange} />}
       </main>
 
       <Navigation active={tab} onChange={setTab} />

@@ -88,7 +88,7 @@ export interface MedicationSchedule {
   notes?: string;
 }
 
-export type Tab = 'dashboard' | 'glucose' | 'food' | 'exercise' | 'symptoms' | 'medications';
+export type Tab = 'dashboard' | 'glucose' | 'food' | 'exercise' | 'symptoms' | 'medications' | 'grocery';
 
 export interface AppData {
   glucoseReadings: GlucoseReading[];
@@ -97,4 +97,5 @@ export interface AppData {
   symptomEntries: SymptomEntry[];
   medicationLogs: MedicationEntry[];
   medicationSchedules: MedicationSchedule[];
+  groceryItems: import('./grocery').GroceryItem[];
 }

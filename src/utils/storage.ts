@@ -9,6 +9,7 @@ const defaultData: AppData = {
   symptomEntries: [],
   medicationLogs: [],
   medicationSchedules: [],
+  groceryItems: [],
 };
 
 export function loadData(): AppData {
