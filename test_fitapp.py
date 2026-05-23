@@ -14,6 +14,7 @@ class FitAppTests(unittest.TestCase):
 
         self.assertEqual(workout.activity, "Run")
         self.assertEqual(metric.metric, "weight")
+        self.assertEqual(app.dietary_constraints, ["gluten", "nuts"])
         self.assertFalse(meal.violates_constraints)
         self.assertEqual(
             app.summary(),
@@ -22,10 +23,11 @@ class FitAppTests(unittest.TestCase):
 
     def test_flags_meal_that_breaks_constraint(self) -> None:
         app = FitApp()
-        app.set_dietary_constraints(["dairy"])
+        app.set_dietary_constraints(["Dairy"])
 
         meal = app.add_meal("Milkshake", calories=450, tags=["Dairy", "dessert"])
 
+        self.assertEqual(app.dietary_constraints, ["dairy"])
         self.assertTrue(meal.violates_constraints)
         self.assertEqual(meal.tags, ["dairy", "dessert"])
 
