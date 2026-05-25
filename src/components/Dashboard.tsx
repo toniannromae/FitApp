@@ -1,193 +1,132 @@
-import { useMemo } from 'react';
-import { format, subDays } from 'date-fns';
-import {
-  LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine,
-} from 'recharts';
-import type { AppData } from '../types';
-import {
-  glucoseStatus, avgLast7Days, estimatedA1C, dailyCarbs, dailyCalories,
-  antiInflammatoryScore, latestSymptomTrend, todayISO,
-} from '../utils/calculations';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from "recharts";
+import { RISK, ALERT_C } from "../data/constants";
+import StatCard from "./ui/StatCard";
+import SectionHeader from "./ui/SectionHeader";
 
 interface Props {
-  data: AppData;
+  students: any[];
 }
 
-function StatCard({
-  title, value, subtitle, color, bg,
-}: {
-  title: string;
-  value: string;
-  subtitle?: string;
-  color: string;
-  bg: string;
-}) {
-  return (
-    <div style={{
-      background: bg,
-      borderRadius: 12,
-      padding: '14px 16px',
-      border: `1px solid ${color}33`,
-    }}>
-      <div style={{ fontSize: 11, color: '#94a3b8', marginBottom: 4 }}>{title}</div>
-      <div style={{ fontSize: 24, fontWeight: 700, color }}>{value}</div>
-      {subtitle && <div style={{ fontSize: 11, color: '#64748b', marginTop: 2 }}>{subtitle}</div>}
-    </div>
+export default function Dashboard({ students }: Props) {
+  const critical = students.filter(s => s.riskLevel === "critical").length;
+  const watch    = students.filter(s => s.riskLevel === "watch").length;
+  const stable   = students.filter(s => s.riskLevel === "stable").length;
+  const avgAtt   = Math.round(students.reduce((a, s) => a + s.attendance.rate, 0) / students.length);
+  const allAlerts = students.flatMap(s =>
+    s.alerts.filter((a: any) => !a.resolved).map((a: any) => ({ ...a, student: s.firstName + " " + s.lastName, risk: s.riskLevel }))
   );
-}
 
-export default function Dashboard({ data }: Props) {
-  const today = todayISO();
-  const avg7 = avgLast7Days(data.glucoseReadings);
-  const latestGlucose = [...data.glucoseReadings]
-    .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())[0];
-  const glucoseInfo = latestGlucose ? glucoseStatus(latestGlucose.value) : null;
+  const pieData = [
+    { name:"Stable",   value:stable,   color:"#5dba80" },
+    { name:"Watch",    value:watch,    color:"#d4c040" },
+    { name:"Critical", value:critical, color:"#e05050" },
+  ];
 
-  const todayCarbs = dailyCarbs(data.foodEntries, today);
-  const todayCals = dailyCalories(data.foodEntries, today);
-  const aiScore = antiInflammatoryScore(data.foodEntries, today);
-  const symptoms = latestSymptomTrend(data.symptomEntries);
-
-  const chartData = useMemo(() => {
-    return Array.from({ length: 7 }, (_, i) => {
-      const date = subDays(new Date(), 6 - i);
-      const dateStr = format(date, 'yyyy-MM-dd');
-      const dayReadings = data.glucoseReadings.filter(r => r.timestamp.startsWith(dateStr));
-      const avg = dayReadings.length
-        ? Math.round(dayReadings.reduce((s, r) => s + r.value, 0) / dayReadings.length)
-        : null;
-      return { date: format(date, 'MM/dd'), avg };
-    });
-  }, [data.glucoseReadings]);
-
-  const aiColor = aiScore > 1 ? '#22c55e' : aiScore < -1 ? '#ef4444' : '#f59e0b';
+  const attData = students[0].attendance.monthly.map((m: any, i: number) => ({
+    month: m.m,
+    "Danielle": Math.round(students[0].attendance.monthly[i].p / (students[0].attendance.monthly[i].p + students[0].attendance.monthly[i].a) * 100),
+    "Marcus":   Math.round(students[1].attendance.monthly[i].p / (students[1].attendance.monthly[i].p + students[1].attendance.monthly[i].a) * 100),
+    "Kezia":    Math.round(students[2].attendance.monthly[i].p / (students[2].attendance.monthly[i].p + students[2].attendance.monthly[i].a) * 100),
+  }));
 
   return (
-    <div style={{ padding: '16px 16px 0' }}>
-      <div style={{ marginBottom: 20 }}>
-        <h2 style={{ margin: 0, fontSize: 20, fontWeight: 700, color: '#f1f5f9' }}>
-          Today's Summary
-        </h2>
-        <p style={{ margin: '2px 0 0', fontSize: 12, color: '#64748b' }}>
-          {format(new Date(), 'EEEE, MMMM d, yyyy')}
-        </p>
+    <div style={{ display:"flex", flexDirection:"column", gap:16 }}>
+      <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill,minmax(140px,1fr))", gap:10 }}>
+        <StatCard label="Total Students" value={students.length} sub="Active enrolment" />
+        <StatCard label="Critical" value={critical} sub="Immediate action needed" color="#e05050" />
+        <StatCard label="Watch" value={watch} sub="Monitor closely" color="#d4c040" />
+        <StatCard label="Avg Attendance" value={`${avgAtt}%`} sub="Across all students" color={avgAtt >= 85 ? "#5dba80" : "#d4a040"} />
+        <StatCard label="Open Alerts" value={allAlerts.length} sub="Unresolved" color="#d4904a" />
       </div>
 
-      {/* Glucose stats */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 10 }}>
-        <StatCard
-          title="Latest Glucose"
-          value={latestGlucose ? `${latestGlucose.value}` : '–'}
-          subtitle={glucoseInfo ? `${glucoseInfo.label} mg/dL` : 'No reading yet'}
-          color={glucoseInfo?.color ?? '#94a3b8'}
-          bg="#1e293b"
-        />
-        <StatCard
-          title="7-Day Avg Glucose"
-          value={avg7 ? `${avg7}` : '–'}
-          subtitle={avg7 ? `Est. A1C: ${estimatedA1C(avg7)}%` : 'No data'}
-          color="#38bdf8"
-          bg="#1e293b"
-        />
-      </div>
-
-      {/* Nutrition */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 10 }}>
-        <StatCard
-          title="Carbs Today"
-          value={todayCarbs ? `${todayCarbs}g` : '–'}
-          subtitle="Target: <150g/day"
-          color={todayCarbs > 150 ? '#f97316' : '#a78bfa'}
-          bg="#1e293b"
-        />
-        <StatCard
-          title="Calories Today"
-          value={todayCals ? `${todayCals}` : '–'}
-          subtitle="kcal logged"
-          color="#a78bfa"
-          bg="#1e293b"
-        />
-      </div>
-
-      {/* Anti-inflammatory + wellbeing */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 16 }}>
-        <StatCard
-          title="Anti-Inflam. Score"
-          value={data.foodEntries.some(e => e.timestamp.startsWith(today)) ? `${aiScore > 0 ? '+' : ''}${aiScore}` : '–'}
-          subtitle="Today's diet score"
-          color={aiColor}
-          bg="#1e293b"
-        />
-        <StatCard
-          title="Wellbeing"
-          value={symptoms.wellbeing !== null ? `${symptoms.wellbeing}/10` : '–'}
-          subtitle={symptoms.pain !== null ? `Pain: ${symptoms.pain}/10` : 'No entry yet'}
-          color={symptoms.wellbeing !== null && symptoms.wellbeing >= 7 ? '#22c55e' : '#f59e0b'}
-          bg="#1e293b"
-        />
-      </div>
-
-      {/* Glucose trend chart */}
-      <div style={{
-        background: '#1e293b',
-        borderRadius: 12,
-        padding: '14px 12px',
-        marginBottom: 16,
-        border: '1px solid #334155',
-      }}>
-        <div style={{ fontSize: 12, color: '#94a3b8', marginBottom: 10, fontWeight: 600 }}>
-          7-Day Glucose Trend (avg mg/dL)
-        </div>
-        <ResponsiveContainer width="100%" height={140}>
-          <LineChart data={chartData}>
-            <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
-            <XAxis dataKey="date" tick={{ fill: '#64748b', fontSize: 10 }} />
-            <YAxis domain={[60, 240]} tick={{ fill: '#64748b', fontSize: 10 }} />
-            <Tooltip
-              contentStyle={{ background: '#0f172a', border: '1px solid #334155', borderRadius: 8 }}
-              labelStyle={{ color: '#94a3b8' }}
-              itemStyle={{ color: '#38bdf8' }}
-            />
-            <ReferenceLine y={70} stroke="#ef4444" strokeDasharray="4 2" label={{ value: '70', fill: '#ef4444', fontSize: 9 }} />
-            <ReferenceLine y={140} stroke="#f59e0b" strokeDasharray="4 2" label={{ value: '140', fill: '#f59e0b', fontSize: 9 }} />
-            <Line
-              type="monotone"
-              dataKey="avg"
-              stroke="#38bdf8"
-              strokeWidth={2}
-              dot={{ fill: '#38bdf8', r: 3 }}
-              connectNulls={false}
-            />
-          </LineChart>
-        </ResponsiveContainer>
-      </div>
-
-      {/* Tips section */}
-      <div style={{
-        background: '#1e293b',
-        borderRadius: 12,
-        padding: '14px 16px',
-        marginBottom: 16,
-        border: '1px solid #334155',
-      }}>
-        <div style={{ fontSize: 12, color: '#94a3b8', marginBottom: 10, fontWeight: 600 }}>
-          Daily Reminders
-        </div>
-        {[
-          { text: 'Check blood glucose before meals and at bedtime', icon: '💉' },
-          { text: 'Stay hydrated — aim for 8+ cups of water', icon: '💧' },
-          { text: 'Anti-inflammatory foods: fatty fish, leafy greens, berries, turmeric', icon: '🥗' },
-          { text: 'Low-impact exercise helps both insulin sensitivity and joints', icon: '🚶' },
-          { text: 'Log symptoms daily to track UCTD flares', icon: '📊' },
-        ].map((tip, i) => (
-          <div key={i} style={{
-            display: 'flex', gap: 8, alignItems: 'flex-start',
-            padding: '4px 0', borderBottom: i < 4 ? '1px solid #1e293b' : 'none',
-          }}>
-            <span style={{ fontSize: 14 }}>{tip.icon}</span>
-            <span style={{ fontSize: 12, color: '#cbd5e1', lineHeight: 1.5 }}>{tip.text}</span>
+      <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:16 }}>
+        <div style={{ background:"#0d1a0e", border:"1px solid #1a3a20", borderRadius:12, padding:16 }}>
+          <SectionHeader title="Risk Distribution" />
+          <div style={{ display:"flex", alignItems:"center", gap:16 }}>
+            <PieChart width={130} height={130}>
+              <Pie data={pieData} cx={60} cy={60} innerRadius={35} outerRadius={60} dataKey="value" stroke="none">
+                {pieData.map((e, i) => <Cell key={i} fill={e.color} />)}
+              </Pie>
+            </PieChart>
+            <div style={{ flex:1 }}>
+              {pieData.map(p => (
+                <div key={p.name} style={{ display:"flex", alignItems:"center", gap:8, marginBottom:8 }}>
+                  <div style={{ width:10, height:10, borderRadius:"50%", background:p.color, flexShrink:0 }} />
+                  <div style={{ flex:1, fontSize:12, color:"#8aaa8a" }}>{p.name}</div>
+                  <div style={{ fontSize:14, color:p.color, fontWeight:"bold" }}>{p.value}</div>
+                </div>
+              ))}
+            </div>
           </div>
-        ))}
+        </div>
+
+        <div style={{ background:"#0d1a0e", border:"1px solid #1a3a20", borderRadius:12, padding:16 }}>
+          <SectionHeader title="Monthly Attendance %" />
+          <ResponsiveContainer width="100%" height={130}>
+            <LineChart data={attData} margin={{ top:4, right:4, bottom:0, left:-20 }}>
+              <CartesianGrid strokeDasharray="2 2" stroke="#1a3a20" />
+              <XAxis dataKey="month" tick={{ fill:"#4a7a5a", fontSize:9 }} axisLine={false} tickLine={false} />
+              <YAxis domain={[40, 100]} tick={{ fill:"#4a7a5a", fontSize:9 }} tickLine={false} axisLine={false} />
+              <Tooltip contentStyle={{ background:"#0d1f10", border:"1px solid #2d5e3a", fontSize:11, fontFamily:"Georgia,serif" }} />
+              <Line type="monotone" dataKey="Danielle" stroke="#d4c040" strokeWidth={1.5} dot={false} />
+              <Line type="monotone" dataKey="Marcus"   stroke="#e05050" strokeWidth={1.5} dot={false} />
+              <Line type="monotone" dataKey="Kezia"    stroke="#5dba80" strokeWidth={1.5} dot={false} />
+            </LineChart>
+          </ResponsiveContainer>
+          <div style={{ display:"flex", gap:14, marginTop:8 }}>
+            {([ ["Danielle","#d4c040"],["Marcus","#e05050"],["Kezia","#5dba80"] ] as [string,string][]).map(([n,c]) => (
+              <span key={n} style={{ fontSize:10, color:c }}>● {n}</span>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      <div style={{ background:"#0d1a0e", border:"1px solid #1a3a20", borderRadius:12, padding:16 }}>
+        <SectionHeader title="Active System Alerts" />
+        <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
+          {allAlerts
+            .sort((a: any, b: any) => ["critical","warning","watch","info"].indexOf(a.level) - ["critical","warning","watch","info"].indexOf(b.level))
+            .slice(0, 6)
+            .map((al: any, i: number) => {
+              const ac = ALERT_C[al.level];
+              return (
+                <div key={i} style={{ background:`${ac.c}08`, border:`1px solid ${ac.b}`, borderRadius:8, padding:"10px 14px", display:"flex", gap:10, alignItems:"flex-start" }}>
+                  <span style={{ color:ac.c, fontSize:14, flexShrink:0 }}>{ac.icon}</span>
+                  <div style={{ flex:1 }}>
+                    <div style={{ display:"flex", gap:8, marginBottom:2, flexWrap:"wrap" }}>
+                      <span style={{ fontSize:12, color:"#c8d8c8" }}>{al.student}</span>
+                      <span style={{ fontSize:10, color:ac.c, background:ac.b + "44", borderRadius:4, padding:"1px 6px" }}>{al.level.toUpperCase()}</span>
+                    </div>
+                    <div style={{ fontSize:12, color:"#7a9a7a" }}>{al.msg}</div>
+                  </div>
+                  <div style={{ fontSize:10, color:"#3a6a4a", flexShrink:0 }}>{al.date}</div>
+                </div>
+              );
+            })}
+        </div>
+      </div>
+
+      <div style={{ background:"#0d1a0e", border:"1px solid #1a3a20", borderRadius:12, padding:16 }}>
+        <SectionHeader title="Student Risk Overview" />
+        <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
+          {students.map(s => {
+            const r = RISK[s.riskLevel];
+            return (
+              <div key={s.id} style={{ display:"flex", alignItems:"center", gap:12, padding:"8px 10px", background:"#091208", borderRadius:8 }}>
+                <div style={{ width:36, height:36, borderRadius:"50%", background:`${r.c}22`, border:`1px solid ${r.c}55`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:11, color:r.c, fontWeight:"bold", flexShrink:0 }}>{s.photo}</div>
+                <div style={{ flex:1 }}>
+                  <div style={{ fontSize:13, color:"#c8d8c8" }}>{s.firstName} {s.lastName}</div>
+                  <div style={{ fontSize:11, color:"#3a6a4a" }}>{s.school} · Form {s.currentForm} · {s.parish}</div>
+                </div>
+                <div style={{ textAlign:"right", marginRight:8 }}>
+                  <div style={{ fontSize:13, color:s.attendance.rate >= 85 ? "#5dba80" : s.attendance.rate >= 70 ? "#d4a040" : "#e05050" }}>{s.attendance.rate}%</div>
+                  <div style={{ fontSize:10, color:"#3a6a4a" }}>attendance</div>
+                </div>
+                <span style={{ color:r.c, background:r.bg, border:`1px solid ${r.border}`, borderRadius:6, padding:"2px 10px", fontSize:11, flexShrink:0 }}>{r.icon} {r.label}</span>
+              </div>
+            );
+          })}
+        </div>
       </div>
     </div>
   );
